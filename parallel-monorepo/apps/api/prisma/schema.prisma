@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+
+  id              String   @id @default(uuid())
+
+  email           String   @unique
+
+  name            String?
+
+  stripeAccountId String?
+
+  bio             String?
+
+  avatar          String?
+
+  isVerified      Boolean  @default(false)
+
+  
+
+  // Reputation
+
+  createdAt       DateTime @default(now())
+
+  listings        Listing[]
+
+  
+
+  // Two-Way Reviews
+
+  reviewsReceived Review[] @relation("ReceivedReviews")
+
+  reviewsGiven    Review[] @relation("SentReviews")
+
+}
+
+
+
+model Review {
+
+  id          String   @id @default(uuid())
+
+  rating      Int      // 1-5
+
+  comment     String
+
+  type        String   // "BUYER_TO_SELLER" or "SELLER_TO_BUYER"
+
+  
+
+  // Relations
+
+  createdAt   DateTime @default(now())
+
+  receiverId  String
+
+  receiver    User     @relation("ReceivedReviews", fields: [receiverId], references: [id])
+
+  
+
+  authorId    String
+
+  author      User     @relation("SentReviews", fields: [authorId], references: [id])
+
+}
+
+
+
+model Listing {
+  id                String   @id @default(uuid())
+  sourcePlatform    String   
+  sourceId          String   
+  sourceUrl         String?
+  
+  title             String
+  description       String?
+  images            String   
+  
+  // Pricing Data
+  priceSource       Float
+  shippingSource    Float
+  
+  // Parallel Data
+  priceParallel     Float    
+  shippingParallel  Float    
+  buyerSavings      Float
+  
+  status            String   @default("ACTIVE")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+}

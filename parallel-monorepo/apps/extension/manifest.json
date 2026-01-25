@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Parallel // The Sync Tool",
+  "version": "1.0.0",
+  "description": "One-click inventory sync for the Parallel Marketplace.",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.ebay.com/*",
+    "https://*.poshmark.com/*",
+    "http://localhost/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.ebay.com/itm/*"],
+      "js": ["src/scripts/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

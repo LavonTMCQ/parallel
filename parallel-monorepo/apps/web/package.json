@@ -1,0 +1,20 @@
+{
+  "name": "parallel-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "autoprefixer": "10.4.14",
+    "eslint-config-next": "^16.1.4",
+    "next": "^16.1.4",
+    "postcss": "8.4.27",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "3.3.3"
+  }
+}
