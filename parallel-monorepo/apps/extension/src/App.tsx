@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, CheckCircle, AlertTriangle, Loader2, DollarSign, ExternalLink, RefreshCw } from 'lucide-react';
 
 function App() {
@@ -6,6 +6,23 @@ function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [itemData, setItemData] = useState<any>(null);
   const [apiResult, setApiResult] = useState<any>(null);
+  const [apiConnected, setApiConnected] = useState(false);
+
+  const API_URL = 'https://parallel-production-e4b6.up.railway.app';
+
+  useEffect(() => {
+    const checkApi = async () => {
+      try {
+        const res = await fetch(`${API_URL}/health`);
+        setApiConnected(res.ok);
+      } catch (e) {
+        setApiConnected(false);
+      }
+    };
+    checkApi();
+    const interval = setInterval(checkApi, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const scanPage = async () => {
     setStatus('SCANNING');
@@ -72,8 +89,8 @@ function App() {
           <span className="text-lime">//</span> PARALLEL
         </div>
         <div className="flex items-center gap-2">
-           <div className="w-2 h-2 rounded-full bg-lime animate-pulse"></div>
-           <span className="text-[10px] font-mono text-dim tracking-widest">SYNC_V1</span>
+           <div className={`w-2 h-2 rounded-full ${apiConnected ? 'bg-lime animate-pulse' : 'bg-red-500'}`}></div>
+           <span className="text-[10px] font-mono text-dim tracking-widest">{apiConnected ? 'CONNECTED' : 'DISCONNECTED'}</span>
         </div>
       </div>
 
