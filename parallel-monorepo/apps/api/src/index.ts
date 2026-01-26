@@ -307,15 +307,27 @@ app.get('/api/v1/listings', async (req, res) => {
   }
 });
 
-// Get single listing
+// Get single listing (enhanced with similar items, seller items, watchers)
 app.get('/api/v1/listings/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const sessionId = req.headers['x-session-id'] as string;
+
     const listing = await prisma.listing.findUnique({
       where: { id },
       include: {
-        user: true,
-        category: { include: { parent: true } }
+        user: {
+          include: {
+            listings: {
+              where: { id: { not: id }, status: 'ACTIVE' },
+              take: 6,
+              orderBy: { createdAt: 'desc' }
+            },
+            reviewsReceived: true
+          }
+        },
+        category: { include: { parent: true } },
+        watchers: true
       }
     });
 
@@ -329,23 +341,61 @@ app.get('/api/v1/listings/:id', async (req, res) => {
       data: { viewCount: { increment: 1 } }
     });
 
-    // Get related listings (same category)
-    let related: any[] = [];
+    // Get similar listings (same category, different item)
+    let similarItems: any[] = [];
     if (listing.categoryId) {
-      related = await prisma.listing.findMany({
+      similarItems = await prisma.listing.findMany({
         where: {
           categoryId: listing.categoryId,
           id: { not: id },
           status: 'ACTIVE'
         },
-        take: 4,
-        orderBy: { viewCount: 'desc' }
+        take: 8,
+        orderBy: { viewCount: 'desc' },
+        include: { category: true }
       });
     }
 
+    // Get more from this category (broader)
+    let categoryItems: any[] = [];
+    if (listing.category?.parentId) {
+      categoryItems = await prisma.listing.findMany({
+        where: {
+          category: { parentId: listing.category.parentId },
+          id: { not: id },
+          status: 'ACTIVE'
+        },
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        include: { category: true }
+      });
+    }
+
+    // Calculate seller stats
+    const sellerStats = listing.user ? {
+      totalListings: listing.user.listings.length + 1, // +1 for current
+      avgRating: listing.user.reviewsReceived.length > 0
+        ? Number((listing.user.reviewsReceived.reduce((acc, r) => acc + r.rating, 0) / listing.user.reviewsReceived.length).toFixed(1))
+        : null,
+      totalReviews: listing.user.reviewsReceived.length,
+      positivePercent: listing.user.reviewsReceived.length > 0
+        ? Math.round((listing.user.reviewsReceived.filter(r => r.rating >= 4).length / listing.user.reviewsReceived.length) * 100)
+        : null
+    } : null;
+
+    // Check if current session is watching
+    const isWatching = sessionId
+      ? listing.watchers.some(w => w.sessionId === sessionId)
+      : false;
+
     res.json({
       ...formatListing(listing),
-      related: related.map(formatListing)
+      watcherCount: listing.watchers.length,
+      isWatching,
+      sellerStats,
+      sellerOtherItems: listing.user?.listings.map(formatListing) || [],
+      similarItems: similarItems.map(formatListing),
+      categoryItems: categoryItems.map(formatListing)
     });
   } catch (error) {
     console.error(`Failed to fetch ${req.params.id}`, error);
@@ -563,10 +613,256 @@ app.get('/api/v1/users/:id', async (req, res) => {
 });
 
 // ============================================
+// OFFERS
+// ============================================
+
+// Create an offer
+app.post('/api/v1/offers', async (req, res) => {
+  try {
+    const { listingId, amount, message, buyerEmail, buyerName } = req.body;
+
+    if (!listingId || !amount) {
+      return res.status(400).json({ error: 'listingId and amount are required' });
+    }
+
+    // Get listing to validate offer
+    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Validate offer amount (must be at least 50% of price)
+    const minOffer = listing.priceParallel * 0.5;
+    if (amount < minOffer) {
+      return res.status(400).json({
+        error: 'OFFER_TOO_LOW',
+        message: `Minimum offer is $${minOffer.toFixed(2)} (50% of listing price)`
+      });
+    }
+
+    // Create offer with 48h expiration
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    const offer = await prisma.offer.create({
+      data: {
+        listingId,
+        amount,
+        message: message || null,
+        buyerEmail: buyerEmail || null,
+        buyerName: buyerName || null,
+        expiresAt
+      },
+      include: { listing: true }
+    });
+
+    console.log(`[OFFER] New offer $${amount} on listing ${listingId}`);
+
+    res.status(201).json({
+      id: offer.id,
+      status: offer.status,
+      amount: offer.amount,
+      expiresAt: offer.expiresAt,
+      message: 'Offer submitted successfully'
+    });
+  } catch (error) {
+    console.error('Failed to create offer:', error);
+    res.status(500).json({ error: 'Failed to create offer' });
+  }
+});
+
+// Get offers for a listing
+app.get('/api/v1/listings/:id/offers', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const offers = await prisma.offer.findMany({
+      where: { listingId: id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(offers);
+  } catch (error) {
+    console.error('Failed to fetch offers:', error);
+    res.status(500).json({ error: 'Failed to fetch offers' });
+  }
+});
+
+// Respond to an offer (accept/decline/counter)
+app.post('/api/v1/offers/:id/respond', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, counterAmount, counterMessage } = req.body;
+
+    if (!['ACCEPT', 'DECLINE', 'COUNTER'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Must be ACCEPT, DECLINE, or COUNTER' });
+    }
+
+    const offer = await prisma.offer.findUnique({
+      where: { id },
+      include: { listing: true }
+    });
+
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer not found' });
+    }
+
+    if (offer.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Offer has already been responded to' });
+    }
+
+    let status = action === 'ACCEPT' ? 'ACCEPTED' : action === 'DECLINE' ? 'DECLINED' : 'COUNTERED';
+
+    const updatedOffer = await prisma.offer.update({
+      where: { id },
+      data: {
+        status,
+        counterAmount: action === 'COUNTER' ? counterAmount : null,
+        counterMessage: action === 'COUNTER' ? counterMessage : null
+      }
+    });
+
+    console.log(`[OFFER] Offer ${id} ${status}`);
+
+    res.json({
+      id: updatedOffer.id,
+      status: updatedOffer.status,
+      counterAmount: updatedOffer.counterAmount,
+      message: `Offer ${status.toLowerCase()}`
+    });
+  } catch (error) {
+    console.error('Failed to respond to offer:', error);
+    res.status(500).json({ error: 'Failed to respond to offer' });
+  }
+});
+
+// ============================================
+// WATCHLIST
+// ============================================
+
+// Add to watchlist
+app.post('/api/v1/watchlist', async (req, res) => {
+  try {
+    const { listingId } = req.body;
+    const sessionId = req.headers['x-session-id'] as string;
+
+    if (!listingId) {
+      return res.status(400).json({ error: 'listingId is required' });
+    }
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'x-session-id header is required' });
+    }
+
+    // Check if listing exists
+    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Check if already watching
+    const existing = await prisma.watchlist.findUnique({
+      where: { listingId_sessionId: { listingId, sessionId } }
+    });
+
+    if (existing) {
+      return res.status(409).json({ error: 'Already watching this listing' });
+    }
+
+    // Add to watchlist
+    await prisma.watchlist.create({
+      data: { listingId, sessionId }
+    });
+
+    // Update favorite count
+    await prisma.listing.update({
+      where: { id: listingId },
+      data: { favoriteCount: { increment: 1 } }
+    });
+
+    // Get updated count
+    const watcherCount = await prisma.watchlist.count({ where: { listingId } });
+
+    console.log(`[WATCHLIST] Added listing ${listingId}`);
+
+    res.status(201).json({
+      success: true,
+      watcherCount,
+      message: 'Added to watchlist'
+    });
+  } catch (error) {
+    console.error('Failed to add to watchlist:', error);
+    res.status(500).json({ error: 'Failed to add to watchlist' });
+  }
+});
+
+// Remove from watchlist
+app.delete('/api/v1/watchlist/:listingId', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const sessionId = req.headers['x-session-id'] as string;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'x-session-id header is required' });
+    }
+
+    await prisma.watchlist.delete({
+      where: { listingId_sessionId: { listingId, sessionId } }
+    });
+
+    // Update favorite count
+    await prisma.listing.update({
+      where: { id: listingId },
+      data: { favoriteCount: { decrement: 1 } }
+    });
+
+    // Get updated count
+    const watcherCount = await prisma.watchlist.count({ where: { listingId } });
+
+    console.log(`[WATCHLIST] Removed listing ${listingId}`);
+
+    res.json({
+      success: true,
+      watcherCount,
+      message: 'Removed from watchlist'
+    });
+  } catch (error) {
+    console.error('Failed to remove from watchlist:', error);
+    res.status(500).json({ error: 'Failed to remove from watchlist' });
+  }
+});
+
+// Get user's watchlist
+app.get('/api/v1/watchlist', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] as string;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'x-session-id header is required' });
+    }
+
+    const watchlist = await prisma.watchlist.findMany({
+      where: { sessionId },
+      include: {
+        listing: {
+          include: { category: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(watchlist.map(w => formatListing(w.listing)));
+  } catch (error) {
+    console.error('Failed to fetch watchlist:', error);
+    res.status(500).json({ error: 'Failed to fetch watchlist' });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
 app.listen(PORT, () => {
-  console.log(`// PARALLEL API v2 listening on port ${PORT}`);
-  console.log(`   Categories, Search, Pagination enabled`);
+  console.log(`// PARALLEL API v3 listening on port ${PORT}`);
+  console.log(`   Categories, Search, Offers, Watchlist enabled`);
 });

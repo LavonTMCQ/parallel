@@ -140,4 +140,52 @@ model Listing {
   @@index([status])
   @@index([priceParallel])
   @@index([createdAt])
+
+  // Relations
+  offers    Offer[]
+  watchers  Watchlist[]
+}
+
+model Offer {
+  id          String   @id @default(uuid())
+  amount      Float
+  message     String?
+  status      String   @default("PENDING") // PENDING, ACCEPTED, DECLINED, COUNTERED, EXPIRED
+
+  // Counter offer
+  counterAmount Float?
+  counterMessage String?
+
+  // Expiration
+  expiresAt   DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  listingId   String
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  buyerId     String?  // Would link to User in production
+  buyerEmail  String?  // For guest offers
+  buyerName   String?
+
+  @@index([listingId])
+  @@index([status])
+}
+
+model Watchlist {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+
+  // Relations
+  listingId   String
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  userId      String?
+  sessionId   String?  // For anonymous users
+
+  @@unique([listingId, userId])
+  @@unique([listingId, sessionId])
+  @@index([listingId])
 }
