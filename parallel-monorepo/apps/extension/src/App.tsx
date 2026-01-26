@@ -12,10 +12,13 @@ function App() {
 
   useEffect(() => {
     const checkApi = async () => {
+      console.log('Checking API:', `${API_URL}/health`);
       try {
         const res = await fetch(`${API_URL}/health`);
+        console.log('API Status:', res.status, res.statusText);
         setApiConnected(res.ok);
       } catch (e) {
+        console.error('API Connection Failed:', e);
         setApiConnected(false);
       }
     };
