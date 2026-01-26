@@ -6,6 +6,7 @@ import {
   Monitor, Shirt, Trophy, Home, Dumbbell, Car,
   ChevronDown, Loader2
 } from 'lucide-react';
+import { API_URL } from '@/lib/api';
 
 interface Category {
   id: string;
@@ -32,7 +33,7 @@ export default function CategoryNav() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/categories')
+    fetch(`${API_URL}/api/v1/categories`)
       .then(res => res.json())
       .then(data => {
         setCategories(data);

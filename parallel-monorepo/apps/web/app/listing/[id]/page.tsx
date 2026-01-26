@@ -9,7 +9,8 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SearchBar from '../../components/SearchBar';
-import CategoryNav from '../../components/CategoryNav';
+import VerticalCategoryNav from '../../components/VerticalCategoryNav';
+import { API_URL } from '@/lib/api';
 
 // Generate session ID for anonymous users
 function getSessionId() {
@@ -186,7 +187,7 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
     const fetchItem = async () => {
       try {
         const sessionId = getSessionId();
-        const res = await fetch(`http://localhost:8000/api/v1/listings/${id}`, {
+        const res = await fetch(`${API_URL}/api/v1/listings/${id}`, {
           headers: { 'x-session-id': sessionId }
         });
         if (res.ok) {
@@ -208,14 +209,14 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
     const sessionId = getSessionId();
     try {
       if (isWatching) {
-        await fetch(`http://localhost:8000/api/v1/watchlist/${id}`, {
+        await fetch(`${API_URL}/api/v1/watchlist/${id}`, {
           method: 'DELETE',
           headers: { 'x-session-id': sessionId }
         });
         setIsWatching(false);
         setWatcherCount(c => c - 1);
       } else {
-        await fetch('http://localhost:8000/api/v1/watchlist', {
+        await fetch(`${API_URL}/api/v1/watchlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
           body: JSON.stringify({ listingId: id })
@@ -229,7 +230,7 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
   };
 
   const submitOffer = async (amount: number, message: string) => {
-    const res = await fetch('http://localhost:8000/api/v1/offers', {
+    const res = await fetch(`${API_URL}/api/v1/offers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ listingId: id, amount, message })
@@ -243,7 +244,7 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
   const deleteListing = async () => {
     if (!confirm('Delete this listing? This cannot be undone.')) return;
     try {
-      await fetch(`http://localhost:8000/api/v1/listings/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/v1/listings/${id}`, { method: 'DELETE' });
       router.push('/');
     } catch (e) {
       alert('Failed to delete');
@@ -280,10 +281,16 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
         <SearchBar onSearch={handleSearch} className="flex-1 max-w-2xl" />
       </nav>
 
-      <CategoryNav />
+      <div className="flex">
+        {/* Left Sidebar */}
+        <div className="hidden lg:block w-64 border-r border-white/10 h-[calc(100vh-73px)] sticky top-[73px] overflow-y-auto bg-surface/50">
+          <VerticalCategoryNav />
+        </div>
 
-      {/* Breadcrumb */}
-      <div className="max-w-7xl mx-auto px-6 py-4">
+        {/* Right Content */}
+        <div className="flex-1 max-w-7xl mx-auto">
+          {/* Breadcrumb */}
+          <div className="px-6 py-4">
         <nav className="flex items-center gap-2 text-sm text-dim">
           <Link href="/" className="hover:text-white transition">Home</Link>
           <ChevronRight size={14} />
@@ -456,7 +463,7 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
               <div className="space-y-3">
                 <button
                   onClick={async () => {
-                    const res = await fetch('http://localhost:8000/api/v1/checkout/session', {
+                    const res = await fetch(`${API_URL}/api/v1/checkout/session`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ listingId: item.id })
@@ -623,6 +630,8 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
           </section>
         )}
       </div>
+    </div>
+  </div>
 
       {/* Offer Modal */}
       <OfferModal

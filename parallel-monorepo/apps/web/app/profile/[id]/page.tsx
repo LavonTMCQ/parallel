@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from 'react';
 import { CheckCircle, Star, Calendar, MapPin, Package, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
+import { API_URL } from '@/lib/api';
 
 export default function UserProfile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -10,7 +11,7 @@ export default function UserProfile({ params }: { params: Promise<{ id: string }
   const [activeTab, setActiveTab] = useState<'LISTINGS' | 'REVIEWS'>('LISTINGS');
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/v1/users/${id}`)
+    fetch(`${API_URL}/api/v1/users/${id}`)
       .then(res => res.json())
       .then(setProfile)
       .catch(console.error);

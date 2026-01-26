@@ -5,8 +5,9 @@ import { Package, ExternalLink, RefreshCw, Tag, Trash2, ShoppingBag, LayoutGrid,
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import CategoryNav from './components/CategoryNav';
+import VerticalCategoryNav from './components/VerticalCategoryNav';
 import SearchBar from './components/SearchBar';
+import { API_URL } from '@/lib/api';
 
 export default function Home() {
   const [listings, setListings] = useState<any[]>([]);
@@ -37,7 +38,7 @@ export default function Home() {
   const fetchListings = async () => {
     if (listings.length === 0) setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/listings');
+      const res = await fetch(`${API_URL}/api/v1/listings`);
       const data = await res.json();
       // API now returns { listings: [], pagination: {} }
       setListings(data.listings || data);
@@ -52,7 +53,7 @@ export default function Home() {
     if (!confirm('Are you sure you want to delete this listing?')) return;
     setListings(prev => prev.filter(l => l.id !== id));
     try {
-      await fetch(`http://localhost:8000/api/v1/listings/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/v1/listings/${id}`, { method: 'DELETE' });
     } catch (e) {
       console.error("Delete failed");
       fetchListings();
@@ -139,12 +140,17 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Category Navigation - visible in Buyer mode */}
-      {viewMode === 'BUYER' && <CategoryNav />}
+      {/* Main Content Area */}
+      <div className="flex">
+        {/* Sidebar - only in Buyer mode */}
+        {viewMode === 'BUYER' && (
+          <div className="hidden lg:block w-64 border-r border-white/10 h-[calc(100vh-73px)] sticky top-[73px] overflow-y-auto bg-surface/50">
+            <VerticalCategoryNav />
+          </div>
+        )}
 
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        
-        {/* SELLER VIEW */}
+        <div className="flex-1 max-w-7xl mx-auto px-8 py-12">
+          {/* SELLER VIEW */}
         {viewMode === 'SELLER' && (
           <div className="animate-in fade-in duration-500">
             <div className="flex justify-between items-end mb-12">
@@ -154,7 +160,7 @@ export default function Home() {
               </div>
               <button 
                 onClick={async () => {
-                  const res = await fetch('http://localhost:8000/api/v1/onboarding/link', { method: 'POST' });
+                  const res = await fetch(`${API_URL}/api/v1/onboarding/link`, { method: 'POST' });
                   const data = await res.json();
                   if (data.url) window.location.href = data.url;
                 }}
@@ -446,8 +452,8 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </div>
-    </main>
-  );
+    </div>
+  </main>
+);
 }

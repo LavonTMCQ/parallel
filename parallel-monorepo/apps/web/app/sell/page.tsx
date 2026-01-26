@@ -9,6 +9,7 @@ import {
   Tag, Package, FileText, Truck, Info, CheckCircle, AlertCircle, Camera,
   Plus, Trash2, GripVertical
 } from 'lucide-react';
+import { API_URL } from '@/lib/api';
 
 interface Category {
   id: string;
@@ -61,7 +62,7 @@ export default function SellPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/categories');
+        const res = await fetch(`${API_URL}/api/v1/categories`);
         const data = await res.json();
         setCategories(data);
       } catch (e) {
@@ -141,7 +142,7 @@ export default function SellPage() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/listings/create', {
+      const res = await fetch(`${API_URL}/api/v1/listings/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

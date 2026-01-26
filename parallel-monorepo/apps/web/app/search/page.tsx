@@ -7,6 +7,7 @@ import { ShoppingBag, ArrowLeft, SlidersHorizontal, X, Loader2 } from 'lucide-re
 import SearchBar from '../components/SearchBar';
 import FilterSidebar from '../components/FilterSidebar';
 import VerticalCategoryNav from '../components/VerticalCategoryNav';
+import { API_URL } from '@/lib/api';
 
 interface Listing {
   id: string;
@@ -80,7 +81,7 @@ function SearchPageContent() {
     params.set('limit', '20');
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/search?${params}`);
+      const res = await fetch(`${API_URL}/api/v1/search?${params}`);
       const data = await res.json();
       setResults(data);
     } catch (e) {
