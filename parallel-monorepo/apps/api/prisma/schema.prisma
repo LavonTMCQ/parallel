@@ -73,25 +73,60 @@ model Review {
 
 
 
+model Category {
+  id          String     @id @default(uuid())
+  name        String     // "Electronics"
+  slug        String     @unique // "electronics"
+  icon        String?    // Lucide icon name: "monitor", "shirt", etc.
+  description String?
+
+  // Hierarchy
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+
+  // Metadata
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  // Relations
+  listings    Listing[]
+}
+
 model Listing {
   id                String   @id @default(uuid())
-  sourcePlatform    String   
-  sourceId          String   
+  sourcePlatform    String
+  sourceId          String
   sourceUrl         String?
-  
+
   title             String
   description       String?
-  images            String   
-  
+  images            String
+
+  // Category & Discovery
+  categoryId        String?
+  category          Category? @relation(fields: [categoryId], references: [id])
+  brand             String?
+  condition         String?  // "new", "like-new", "good", "fair"
+
+  // Source Category (raw from eBay)
+  sourceCategoryId  String?
+  sourceCategoryPath String? // "Electronics > Cameras & Photo > Digital Cameras"
+
   // Pricing Data
   priceSource       Float
   shippingSource    Float
-  
+
   // Parallel Data
-  priceParallel     Float    
-  shippingParallel  Float    
+  priceParallel     Float
+  shippingParallel  Float
   buyerSavings      Float
-  
+
+  // Engagement
+  viewCount         Int      @default(0)
+  favoriteCount     Int      @default(0)
+
   status            String   @default("ACTIVE")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -99,4 +134,10 @@ model Listing {
   // Relations
   userId            String?
   user              User?    @relation(fields: [userId], references: [id])
+
+  // Indexes for search/filter performance
+  @@index([categoryId])
+  @@index([status])
+  @@index([priceParallel])
+  @@index([createdAt])
 }

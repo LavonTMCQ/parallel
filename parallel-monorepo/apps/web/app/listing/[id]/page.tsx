@@ -116,6 +116,14 @@ export default function ListingDetail({ params }: { params: Promise<{ id: string
           </div>
 
           <div className="bg-surface border border-white/10 rounded-2xl p-8 mb-8 relative overflow-hidden">
+            {item.user && (
+              <Link href={`/profile/${item.user.id}`} className="absolute top-4 right-4 flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition group">
+                 <img src={item.user.avatar || "https://via.placeholder.com/30"} className="w-6 h-6 rounded-full" />
+                 <span className="text-xs font-bold">{item.user.name}</span>
+                 {item.user.isVerified && <CheckCircle size={12} className="text-lime" />}
+              </Link>
+            )}
+            
             <div className="absolute top-0 right-0 p-4 opacity-10">
                <ShieldCheck size={100} />
             </div>
