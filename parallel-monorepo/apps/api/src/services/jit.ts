@@ -6,7 +6,7 @@ export async function checkAvailability(url: string): Promise<'AVAILABLE' | 'SOL
   
   try {
     browser = await puppeteer.launch({
-      headless: "new",
+      headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
@@ -17,7 +17,7 @@ export async function checkAvailability(url: string): Promise<'AVAILABLE' | 'SOL
     
     // Optimization: Block images/fonts to speed up
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
+    page.on('request', (req: { resourceType: () => string; abort: () => void; continue: () => void }) => {
       if (['image', 'stylesheet', 'font'].includes(req.resourceType())) {
         req.abort();
       } else {

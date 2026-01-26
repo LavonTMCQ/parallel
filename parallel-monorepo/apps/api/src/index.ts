@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+console.log('[DEBUG] CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME);
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -6,6 +9,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { checkAvailability } from './services/jit';
 import { getShippingRate, estimateWeight } from './services/shipping';
 import { detectCategory, mapCondition } from './data/categoryMapping';
+import { MediaService } from './services/media';
 
 // Initialize Prisma
 const prisma = new PrismaClient();
@@ -104,7 +108,7 @@ app.get('/api/v1/categories/:slug', async (req, res) => {
     }
 
     // Get category IDs (include children for parent categories)
-    const categoryIds = [category.id, ...category.children.map(c => c.id)];
+    const categoryIds = [category.id, ...category.children.map((c: { id: string }) => c.id)];
 
     // Build sort order
     let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
@@ -180,7 +184,7 @@ app.get('/api/v1/search', async (req, res) => {
         include: { children: true }
       });
       if (cat) {
-        const categoryIds = [cat.id, ...cat.children.map(c => c.id)];
+        const categoryIds = [cat.id, ...cat.children.map((c: { id: string }) => c.id)];
         where.categoryId = { in: categoryIds };
       }
     }
@@ -239,8 +243,8 @@ app.get('/api/v1/search', async (req, res) => {
         pages: Math.ceil(total / limit)
       },
       filters: {
-        brands: brands.filter(b => b.brand).map(b => ({ name: b.brand, count: b._count })),
-        conditions: conditions.filter(c => c.condition).map(c => ({ name: c.condition, count: c._count }))
+        brands: brands.filter((b: { brand: string | null }) => b.brand).map((b: { brand: string | null; _count: number }) => ({ name: b.brand, count: b._count })),
+        conditions: conditions.filter((c: { condition: string | null }) => c.condition).map((c: { condition: string | null; _count: number }) => ({ name: c.condition, count: c._count }))
       }
     });
   } catch (error) {
@@ -270,7 +274,7 @@ app.get('/api/v1/listings', async (req, res) => {
         include: { children: true }
       });
       if (cat) {
-        const categoryIds = [cat.id, ...cat.children.map(c => c.id)];
+        const categoryIds = [cat.id, ...cat.children.map((c: { id: string }) => c.id)];
         where.categoryId = { in: categoryIds };
       }
     }
@@ -375,11 +379,11 @@ app.get('/api/v1/listings/:id', async (req, res) => {
     const sellerStats = listing.user ? {
       totalListings: listing.user.listings.length + 1, // +1 for current
       avgRating: listing.user.reviewsReceived.length > 0
-        ? Number((listing.user.reviewsReceived.reduce((acc, r) => acc + r.rating, 0) / listing.user.reviewsReceived.length).toFixed(1))
+        ? Number((listing.user.reviewsReceived.reduce((acc: number, r: { rating: number }) => acc + r.rating, 0) / listing.user.reviewsReceived.length).toFixed(1))
         : null,
       totalReviews: listing.user.reviewsReceived.length,
       positivePercent: listing.user.reviewsReceived.length > 0
-        ? Math.round((listing.user.reviewsReceived.filter(r => r.rating >= 4).length / listing.user.reviewsReceived.length) * 100)
+        ? Math.round((listing.user.reviewsReceived.filter((r: { rating: number }) => r.rating >= 4).length / listing.user.reviewsReceived.length) * 100)
         : null
     } : null;
 
@@ -465,7 +469,11 @@ app.post('/api/v1/ingest', async (req, res) => {
       parallelShipping: estimatedShipping
     });
 
-    // E. Write to DB
+    // E. Capture Images to Cloudinary (Production Armor)
+    console.log(`[MEDIA] capturing ${images?.length || 0} images...`);
+    const capturedImages = await MediaService.uploadMany(images || []);
+
+    // F. Write to DB
     const listing = await prisma.listing.create({
       data: {
         title,
@@ -473,7 +481,7 @@ app.post('/api/v1/ingest', async (req, res) => {
         sourceId: source_id || 'unknown',
         sourceUrl: url || '',
         description: 'Imported via Extension',
-        images: JSON.stringify(images || []),
+        images: JSON.stringify(capturedImages),
 
         // Category & Discovery
         categoryId,
@@ -578,6 +586,10 @@ app.post('/api/v1/listings/create', async (req, res) => {
       fullDescription = fullDescription ? `${fullDescription}\n\n--- Item Specifics ---\n${specsText}` : specsText;
     }
 
+    // Capture Images to Cloudinary
+    console.log(`[MEDIA] capturing ${images?.length || 0} images for manual listing...`);
+    const capturedImages = await MediaService.uploadMany(images || []);
+
     // Create the listing
     const listing = await prisma.listing.create({
       data: {
@@ -586,7 +598,7 @@ app.post('/api/v1/listings/create', async (req, res) => {
         sourcePlatform: 'parallel',
         sourceId: `manual-${Date.now()}`,
         sourceUrl: null,
-        images: JSON.stringify(images),
+        images: JSON.stringify(capturedImages),
 
         // Category & Discovery
         categoryId: categoryId || null,
