@@ -1,5 +1,5 @@
 [phases.setup]
-aptPkgs = ["chromium", "chromium-sandbox"]
+aptPkgs = ["chromium-browser"]
 
 [phases.install]
 cmds = ["npm install"]
@@ -12,4 +12,4 @@ cmd = "npm run start"
 
 [variables]
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium-browser"
