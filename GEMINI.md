@@ -20,7 +20,7 @@
 ### Stack
 *   **Frontend:** Web (React/Next.js 15), Mobile (React Native or iOS Swift).
 *   **Ingestion:** Chrome Extension (Manifest V3, Client-side DOM parsing).
-*   **Backend:** Node.js/Express + Prisma + SQLite (Dev).
+*   **Backend:** Node.js/Express + Prisma + **PostgreSQL (Railway Managed)**.
 *   **Payments:** Stripe Connect (Critical for Seller Payouts and KYC).
 
 ## 3. Design System ("The Architect")
@@ -41,8 +41,9 @@
 *   Dashboard & Detail pages display inventory.
 
 **Phase 2 (Transactions) is Active.**
-*   Stripe Connect scaffold built (Mock Mode).
-*   **Current Task:** Implementing JIT Availability Checker (Puppeteer).
+*   **Iron Spine:** Migrated from SQLite to **PostgreSQL on Railway**.
+*   **Authentication:** Currently setting up **Clerk**.
+*   **Safety:** JIT Availability Checker (Puppeteer) implemented.
 
 ## 5. Usage
 *   **Context:** Refer to `Parallel_Technical_PRD.markdown` for specific logic rules regarding pricing and quality gates.

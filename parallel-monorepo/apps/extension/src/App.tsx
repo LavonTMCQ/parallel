@@ -44,7 +44,8 @@ function App() {
   const confirmImport = async () => {
     setStatus('IMPORTING');
     try {
-      const res = await fetch('http://localhost:8000/api/v1/ingest', {
+      const API_URL = 'https://parallel-production-e4b6.up.railway.app';
+      const res = await fetch(`${API_URL}/api/v1/ingest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(itemData)

@@ -6,7 +6,8 @@ Parallel is a "Sync & Slash" marketplace. We mirror inventory from external plat
 ## Tech Stack
 *   **Monorepo Manager:** NPM Workspaces
 *   **Frontend:** Next.js 15 (App Router), Tailwind CSS
-*   **Backend:** Node.js (Express), Prisma ORM, SQLite (Dev)
+*   **Backend:** Node.js (Express), Prisma ORM, **PostgreSQL (Railway Managed)**
+*   **Authentication:** **Clerk (Dark Theme)**
 *   **Extension:** React, Vite, Manifest V3
 *   **Payments & KYC:** Stripe (Connect, Identity, Tax, Radar)
 *   **Shipping:** EasyPost

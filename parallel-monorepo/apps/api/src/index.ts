@@ -705,35 +705,57 @@ app.post('/api/v1/onboarding/link', async (req, res) => {
 
 app.post('/api/v1/checkout/session', async (req, res) => {
   const { listingId } = req.body;
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
   console.log(`[STRIPE] Creating Checkout for ${listingId}`);
 
   try {
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-    if (!listing || !listing.sourceUrl) {
+    if (!listing) {
       return res.status(404).json({ error: "Listing not found" });
     }
 
-    const status = await checkAvailability(listing.sourceUrl);
-
-    if (status === 'SOLD') {
-      await prisma.listing.update({
-        where: { id: listingId },
-        data: { status: 'SOLD_ON_SOURCE' }
-      });
-      return res.status(409).json({ error: "Item just sold on eBay! Transaction blocked." });
+    // Check availability (JIT)
+    if (listing.sourceUrl) {
+      const status = await checkAvailability(listing.sourceUrl);
+      if (status === 'SOLD') {
+        await prisma.listing.update({ where: { id: listingId }, data: { status: 'SOLD_ON_SOURCE' } });
+        return res.status(409).json({ error: "Item just sold on eBay! Transaction blocked." });
+      }
     }
 
-    if (status === 'ERROR') {
-      return res.status(500).json({ error: "Could not verify item availability. Try again." });
+    // Mock Mode if no key
+    if (!stripeKey) {
+      console.log("[STRIPE] Mock Mode: Returning fake URL");
+      return res.json({ url: "http://localhost:3000/success_mock", mock: true });
     }
 
-    return res.json({
-      url: "http://localhost:3000/success_mock",
-      mock: true
+    // Real Stripe Session
+    const { default: Stripe } = await import('stripe');
+    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: listing.title,
+            images: listing.images ? JSON.parse(listing.images).slice(0, 1) : [],
+          },
+          unit_amount: Math.round((listing.priceParallel + listing.shippingParallel) * 100), // cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/success_mock?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/listing/${listingId}`,
+      metadata: { listingId },
     });
 
-  } catch (e) {
-    console.error(e);
+    return res.json({ url: session.url });
+
+  } catch (e: any) {
+    console.error('[STRIPE] Checkout failed:', e);
     res.status(500).json({ error: "Checkout failed" });
   }
 });
@@ -1021,6 +1043,53 @@ app.get('/api/v1/watchlist', async (req, res) => {
     console.error('Failed to fetch watchlist:', error);
     res.status(500).json({ error: 'Failed to fetch watchlist' });
   }
+});
+
+// ============================================
+// STRIPE WEBHOOKS
+// ============================================
+
+app.post('/api/v1/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  if (!stripeKey || !webhookSecret) {
+    console.error('[STRIPE] Missing API Key or Webhook Secret');
+    return res.status(500).send('Configuration Error');
+  }
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // Dynamically import Stripe to avoid initialization errors if key is missing
+    const { default: Stripe } = await import('stripe');
+    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    
+    event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+  } catch (err: any) {
+    console.error(`[STRIPE] Webhook Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object as any;
+      console.log(`[STRIPE] Payment success for session: ${session.id}`);
+      
+      // Logic to mark item as sold
+      if (session.metadata?.listingId) {
+        const listingId = session.metadata.listingId;
+        await prisma.listing.update({ where: { id: listingId }, data: { status: 'SOLD' } });
+        console.log(`[STRIPE] Marked listing ${listingId} as SOLD`);
+      }
+      break;
+    default:
+      console.log(`[STRIPE] Unhandled event type ${event.type}`);
+  }
+
+  res.json({ received: true });
 });
 
 // ============================================
