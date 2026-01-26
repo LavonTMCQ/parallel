@@ -18,7 +18,8 @@
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
     "prisma": "^5.17.0",
-    "puppeteer": "^24.1.1"
+    "puppeteer": "^24.1.1",
+    "stripe": "^20.2.0"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
