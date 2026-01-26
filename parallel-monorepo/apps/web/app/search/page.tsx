@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ShoppingBag, ArrowLeft, SlidersHorizontal, X } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, SlidersHorizontal, X, Loader2 } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import FilterSidebar from '../components/FilterSidebar';
 import VerticalCategoryNav from '../components/VerticalCategoryNav';
@@ -32,7 +32,23 @@ interface SearchResponse {
   };
 }
 
+function SearchLoading() {
+  return (
+    <div className="min-h-screen bg-midnight flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-lime animate-spin" />
+    </div>
+  );
+}
+
 export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchLoading />}>
+      <SearchPageContent />
+    </Suspense>
+  );
+}
+
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 

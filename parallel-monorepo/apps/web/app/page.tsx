@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Package, ExternalLink, RefreshCw, Tag, Trash2, ShoppingBag, LayoutGrid, List, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import CategoryNav from './components/CategoryNav';
 import SearchBar from './components/SearchBar';
 
@@ -107,9 +108,35 @@ export default function Home() {
           </div>
         </div>
 
-        <button onClick={fetchListings} className="p-2 hover:bg-white/5 rounded-full transition text-dim hover:text-lime">
-           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={fetchListings} className="p-2 hover:bg-white/5 rounded-full transition text-dim hover:text-lime">
+             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+
+          {/* Auth */}
+          <SignedOut>
+            <SignInButton mode="modal">
+              <button className="px-4 py-2 text-sm text-dim hover:text-white transition">
+                Sign In
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition">
+                Sign Up
+              </button>
+            </SignUpButton>
+          </SignedOut>
+          <SignedIn>
+            <UserButton
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: 'w-9 h-9',
+                }
+              }}
+            />
+          </SignedIn>
+        </div>
       </nav>
 
       {/* Category Navigation - visible in Buyer mode */}

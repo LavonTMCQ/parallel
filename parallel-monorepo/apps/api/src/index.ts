@@ -536,7 +536,8 @@ app.post('/api/v1/listings/create', async (req, res) => {
       shippingPrice,
       images,
       acceptsOffers,
-      specifics
+      specifics,
+      clerkUserId
     } = req.body;
 
     // Validation
@@ -551,6 +552,23 @@ app.post('/api/v1/listings/create', async (req, res) => {
     }
     if (!images || images.length === 0) {
       return res.status(400).json({ error: 'At least one image is required' });
+    }
+
+    // Find or create user if clerkUserId provided
+    let userId: string | null = null;
+    if (clerkUserId) {
+      let user = await prisma.user.findUnique({ where: { clerkId: clerkUserId } });
+      if (!user) {
+        // Create a placeholder user - will be updated with full profile via webhook
+        user = await prisma.user.create({
+          data: {
+            clerkId: clerkUserId,
+            email: `${clerkUserId}@placeholder.parallel`, // Temporary until webhook updates
+          }
+        });
+        console.log(`[AUTH] Created placeholder user for Clerk ID: ${clerkUserId}`);
+      }
+      userId = user.id;
     }
 
     // Format specifics into description if provided
@@ -582,6 +600,9 @@ app.post('/api/v1/listings/create', async (req, res) => {
         priceParallel: price,
         shippingParallel: shippingPrice,
         buyerSavings: 0, // No savings for direct listings
+
+        // Owner
+        userId: userId,
       }
     });
 

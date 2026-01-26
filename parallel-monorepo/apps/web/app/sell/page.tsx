@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import {
   Upload, X, Image as ImageIcon, ChevronDown, ChevronRight, DollarSign,
   Tag, Package, FileText, Truck, Info, CheckCircle, AlertCircle, Camera,
@@ -32,6 +33,7 @@ const SHIPPING_OPTIONS = [
 
 export default function SellPage() {
   const router = useRouter();
+  const { userId } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -154,6 +156,7 @@ export default function SellPage() {
           images,
           acceptsOffers,
           specifics: specifics.filter(s => s.key && s.value),
+          clerkUserId: userId, // Link to authenticated user
         }),
       });
 
