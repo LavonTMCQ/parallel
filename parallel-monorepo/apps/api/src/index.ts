@@ -520,6 +520,138 @@ app.delete('/api/v1/listings/:id', async (req, res) => {
 });
 
 // ============================================
+// MANUAL LISTING CREATION (Sell Page)
+// ============================================
+
+app.post('/api/v1/listings/create', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      categoryId,
+      brand,
+      condition,
+      price,
+      shippingOption,
+      shippingPrice,
+      images,
+      acceptsOffers,
+      specifics
+    } = req.body;
+
+    // Validation
+    if (!title || title.length < 10) {
+      return res.status(400).json({ error: 'Title must be at least 10 characters' });
+    }
+    if (!condition) {
+      return res.status(400).json({ error: 'Condition is required' });
+    }
+    if (!price || price <= 0) {
+      return res.status(400).json({ error: 'Valid price is required' });
+    }
+    if (!images || images.length === 0) {
+      return res.status(400).json({ error: 'At least one image is required' });
+    }
+
+    // Format specifics into description if provided
+    let fullDescription = description || '';
+    if (specifics && specifics.length > 0) {
+      const specsText = specifics.map((s: { key: string; value: string }) => `${s.key}: ${s.value}`).join('\n');
+      fullDescription = fullDescription ? `${fullDescription}\n\n--- Item Specifics ---\n${specsText}` : specsText;
+    }
+
+    // Create the listing
+    const listing = await prisma.listing.create({
+      data: {
+        title,
+        description: fullDescription,
+        sourcePlatform: 'parallel',
+        sourceId: `manual-${Date.now()}`,
+        sourceUrl: null,
+        images: JSON.stringify(images),
+
+        // Category & Discovery
+        categoryId: categoryId || null,
+        brand: brand || null,
+        condition,
+
+        // Pricing - For manual listings, source price = parallel price
+        // since there's no external source to compare against
+        priceSource: price,
+        shippingSource: shippingPrice,
+        priceParallel: price,
+        shippingParallel: shippingPrice,
+        buyerSavings: 0, // No savings for direct listings
+      }
+    });
+
+    console.log(`[CREATE] Manual listing ${listing.id}: ${title}`);
+
+    return res.status(201).json({
+      id: listing.id,
+      status: 'CREATED',
+      title: listing.title,
+      price: listing.priceParallel,
+      message: 'Listing created successfully'
+    });
+
+  } catch (error) {
+    console.error('Failed to create listing:', error);
+    return res.status(500).json({ error: 'Failed to create listing' });
+  }
+});
+
+// Update existing listing
+app.put('/api/v1/listings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      description,
+      categoryId,
+      brand,
+      condition,
+      price,
+      shippingPrice,
+      images,
+      status
+    } = req.body;
+
+    const listing = await prisma.listing.findUnique({ where: { id } });
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    const updatedListing = await prisma.listing.update({
+      where: { id },
+      data: {
+        ...(title && { title }),
+        ...(description !== undefined && { description }),
+        ...(categoryId && { categoryId }),
+        ...(brand !== undefined && { brand }),
+        ...(condition && { condition }),
+        ...(price && { priceParallel: price, priceSource: price }),
+        ...(shippingPrice !== undefined && { shippingParallel: shippingPrice, shippingSource: shippingPrice }),
+        ...(images && { images: JSON.stringify(images) }),
+        ...(status && { status }),
+      }
+    });
+
+    console.log(`[UPDATE] Listing ${id} updated`);
+
+    return res.json({
+      id: updatedListing.id,
+      status: 'UPDATED',
+      message: 'Listing updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Failed to update listing:', error);
+    return res.status(500).json({ error: 'Failed to update listing' });
+  }
+});
+
+// ============================================
 // STRIPE / CHECKOUT (Unchanged)
 // ============================================
 

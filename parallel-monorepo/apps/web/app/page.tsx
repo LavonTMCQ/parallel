@@ -78,25 +78,33 @@ export default function Home() {
         )}
 
         {/* Role Switcher */}
-        <div className="bg-surface border border-white/10 p-1 rounded-lg flex gap-1">
-           <button
-             onClick={() => setViewMode('SELLER')}
-             className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'SELLER' ? 'bg-white/10 text-white' : 'text-dim hover:text-white'}`}
-           >
-             <List size={14} /> Seller Dashboard
-           </button>
-           <button
-             onClick={() => setViewMode('BUYER')}
-             className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'BUYER' ? 'bg-lime text-midnight' : 'text-dim hover:text-white'}`}
-           >
-             <LayoutGrid size={14} /> Shop Market
-           </button>
-           <button
-             onClick={() => setViewMode('BOARD')}
-             className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'BOARD' ? 'bg-white/10 text-white' : 'text-dim hover:text-white'}`}
-           >
-             <Tag size={14} /> Board View
-           </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/sell"
+            className="bg-lime text-midnight px-4 py-2 rounded-lg font-bold text-sm hover:bg-lime/90 transition flex items-center gap-2"
+          >
+            <Package size={16} /> Sell
+          </Link>
+          <div className="bg-surface border border-white/10 p-1 rounded-lg flex gap-1">
+             <button
+               onClick={() => setViewMode('SELLER')}
+               className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'SELLER' ? 'bg-white/10 text-white' : 'text-dim hover:text-white'}`}
+             >
+               <List size={14} /> Seller Dashboard
+             </button>
+             <button
+               onClick={() => setViewMode('BUYER')}
+               className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'BUYER' ? 'bg-lime text-midnight' : 'text-dim hover:text-white'}`}
+             >
+               <LayoutGrid size={14} /> Shop Market
+             </button>
+             <button
+               onClick={() => setViewMode('BOARD')}
+               className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${viewMode === 'BOARD' ? 'bg-white/10 text-white' : 'text-dim hover:text-white'}`}
+             >
+               <Tag size={14} /> Board View
+             </button>
+          </div>
         </div>
 
         <button onClick={fetchListings} className="p-2 hover:bg-white/5 rounded-full transition text-dim hover:text-lime">
