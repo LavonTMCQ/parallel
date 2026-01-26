@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ShoppingBag, ArrowLeft, SlidersHorizontal, X } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import FilterSidebar from '../components/FilterSidebar';
-import CategoryNav from '../components/CategoryNav';
+import VerticalCategoryNav from '../components/VerticalCategoryNav';
 
 interface Listing {
   id: string;
@@ -89,7 +89,6 @@ export default function SearchPage() {
       }
     });
 
-    // Reset to page 1 when filters change
     params.set('page', '1');
     router.push(`/search?${params.toString()}`);
   };
@@ -116,68 +115,64 @@ export default function SearchPage() {
         <SearchBar initialQuery={query} onSearch={handleSearch} className="flex-1 max-w-2xl" />
       </nav>
 
-      <CategoryNav />
-
-      <div className="max-w-7xl mx-auto px-8 py-8">
-        {/* Results Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">
-              {query ? `Results for "${query}"` : 'All Items'}
-            </h1>
-            <p className="text-sm text-dim">
-              {results?.pagination.total || 0} items found
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Mobile filter toggle */}
-            <button
-              onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className="lg:hidden flex items-center gap-2 px-4 py-2 bg-surface border border-white/10 rounded-lg text-sm"
-            >
-              <SlidersHorizontal size={16} />
-              Filters
-            </button>
-
-            {/* Sort */}
-            <select
-              value={sort}
-              onChange={(e) => updateFilters({ sort: e.target.value })}
-              className="bg-surface border border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-lime/50"
-            >
-              <option value="newest">Newest First</option>
-              <option value="price_asc">Price: Low to High</option>
-              <option value="price_desc">Price: High to Low</option>
-              <option value="popular">Most Popular</option>
-            </select>
-          </div>
+      {/* Main Layout */}
+      <div className="flex">
+        
+        {/* Left Sidebar (Categories + Filters) */}
+        <div className="hidden lg:flex flex-col w-64 border-r border-white/10 h-[calc(100vh-73px)] sticky top-[73px] overflow-y-auto bg-surface/50">
+           <VerticalCategoryNav />
+           <div className="p-4 border-t border-white/10">
+              <h3 className="font-mono text-xs text-dim uppercase tracking-widest mb-4">Filters</h3>
+              <FilterSidebar
+                brands={results?.filters.brands || []}
+                conditions={results?.filters.conditions || []}
+                selectedBrand={brand}
+                selectedCondition={condition}
+                priceRange={minPrice !== undefined ? { min: minPrice, max: maxPrice || 999999 } : undefined}
+                onFilterChange={(filters) => updateFilters(filters)}
+                onClearFilters={clearAllFilters}
+              />
+           </div>
         </div>
 
-        <div className="flex gap-8">
-          {/* Sidebar */}
-          <div className={`${showMobileFilters ? 'fixed inset-0 z-50 bg-midnight p-4 lg:relative lg:inset-auto lg:p-0 lg:bg-transparent' : 'hidden lg:block'}`}>
-            {showMobileFilters && (
+        {/* Right Content */}
+        <div className="flex-1 px-8 py-8">
+          
+          {/* Results Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">
+                {query ? `Results for "${query}"` : 'All Items'}
+              </h1>
+              <p className="text-sm text-dim">
+                {results?.pagination.total || 0} items found
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => setShowMobileFilters(false)}
-                className="lg:hidden absolute top-4 right-4 p-2"
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className="lg:hidden flex items-center gap-2 px-4 py-2 bg-surface border border-white/10 rounded-lg text-sm"
               >
-                <X size={24} />
+                <SlidersHorizontal size={16} />
+                Filters
               </button>
-            )}
-            <FilterSidebar
-              brands={results?.filters.brands || []}
-              conditions={results?.filters.conditions || []}
-              selectedBrand={brand}
-              selectedCondition={condition}
-              priceRange={minPrice !== undefined ? { min: minPrice, max: maxPrice || 999999 } : undefined}
-              onFilterChange={(filters) => updateFilters(filters)}
-              onClearFilters={clearAllFilters}
-            />
+
+              <select
+                value={sort}
+                onChange={(e) => updateFilters({ sort: e.target.value })}
+                className="bg-surface border border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-lime/50"
+              >
+                <option value="newest">Newest First</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="popular">Most Popular</option>
+              </select>
+            </div>
           </div>
 
           {/* Results Grid */}
-          <div className="flex-1">
+          <div>
             {loading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {[...Array(8)].map((_, i) => (
@@ -199,10 +194,7 @@ export default function SearchPage() {
                 <p className="text-dim text-sm mb-6">
                   Try adjusting your search or filters
                 </p>
-                <button
-                  onClick={clearAllFilters}
-                  className="text-lime hover:underline text-sm"
-                >
+                <button onClick={clearAllFilters} className="text-lime hover:underline text-sm">
                   Clear all filters
                 </button>
               </div>
@@ -225,11 +217,6 @@ export default function SearchPage() {
                         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded">
                           -{Math.round((item.buyerSavings / (item.priceSource + item.shippingSource)) * 100)}%
                         </div>
-                        {item.condition && (
-                          <div className="absolute top-2 left-2 bg-surface/90 backdrop-blur text-[10px] font-medium px-2 py-1 rounded capitalize">
-                            {item.condition}
-                          </div>
-                        )}
                       </div>
                       <div className="p-4">
                         {item.brand && (
