@@ -731,7 +731,7 @@ app.post('/api/v1/checkout/session', async (req, res) => {
 
     // Real Stripe Session
     const { default: Stripe } = await import('stripe');
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    const stripe = new Stripe(stripeKey);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -1064,7 +1064,7 @@ app.post('/api/v1/webhooks/stripe', express.raw({ type: 'application/json' }), a
   try {
     // Dynamically import Stripe to avoid initialization errors if key is missing
     const { default: Stripe } = await import('stripe');
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    const stripe = new Stripe(stripeKey);
     
     event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
   } catch (err: any) {
