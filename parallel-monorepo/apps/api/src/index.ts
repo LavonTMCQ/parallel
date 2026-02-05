@@ -5,59 +5,16 @@ import express from 'express';
 import cors, { type CorsOptions } from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from './lib/prisma';
+import { validateEnv, IS_PROD, parsePort, parseCorsOrigins } from './lib/env';
+import categoriesRouter from './routes/categories';
+import searchRouter from './routes/search';
 import { checkAvailability } from './services/jit';
 import { getShippingRate, estimateWeight } from './services/shipping';
 import { detectCategory, mapCondition } from './data/categoryMapping';
 import { MediaService } from './services/media';
 
-const NODE_ENV = process.env.NODE_ENV ?? 'development';
-const IS_PROD = NODE_ENV === 'production';
-
-function parsePort(value: string | undefined, fallback: number): number {
-  const n = value ? Number(value) : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
-}
-
-function parseCorsOrigins(value: string | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function validateEnv() {
-  const missing: string[] = [];
-
-  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
-  if (IS_PROD && !process.env.CORS_ORIGINS) missing.push('CORS_ORIGINS');
-
-  if (missing.length) {
-    const msg = `[ENV] Missing required env vars: ${missing.join(', ')}`;
-    console.error(msg);
-    throw new Error(msg);
-  }
-
-  const cloudinaryMissing = [
-    'CLOUDINARY_CLOUD_NAME',
-    'CLOUDINARY_API_KEY',
-    'CLOUDINARY_API_SECRET',
-  ].filter((k) => !process.env[k]);
-
-  if (cloudinaryMissing.length) {
-    console.warn(
-      `[ENV] Cloudinary not fully configured (optional in dev): missing ${cloudinaryMissing.join(
-        ', ',
-      )}`,
-    );
-  }
-}
-
-validateEnv();
-
-// Initialize Prisma (after env validation)
-const prisma = new PrismaClient();
 
 const app = express();
 app.disable('x-powered-by');
@@ -133,197 +90,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'parallel-api-v2' });
 });
 
-// ============================================
-// CATEGORIES
-// ============================================
+// Domain Routers
+app.use('/api/v1/categories', categoriesRouter);
+app.use('/api/v1/search', searchRouter);
 
-// Get all categories (with hierarchy)
-app.get('/api/v1/categories', async (req, res) => {
-  try {
-    const categories = await prisma.category.findMany({
-      where: { parentId: null, isActive: true },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        children: {
-          where: { isActive: true },
-          orderBy: { sortOrder: 'asc' }
-        },
-        _count: { select: { listings: true } }
-      }
-    });
-
-    res.json(categories);
-  } catch (error) {
-    console.error('Failed to fetch categories:', error);
-    res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-});
-
-// Get single category with listings
-app.get('/api/v1/categories/:slug', async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const sort = (req.query.sort as string) || 'newest';
-
-    const category = await prisma.category.findUnique({
-      where: { slug },
-      include: {
-        children: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
-        parent: true
-      }
-    });
-
-    if (!category) {
-      return res.status(404).json({ error: 'Category not found' });
-    }
-
-    // Get category IDs (include children for parent categories)
-    const categoryIds = [category.id, ...category.children.map((c: { id: string }) => c.id)];
-
-    // Build sort order
-    let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
-    if (sort === 'price_asc') orderBy = { priceParallel: 'asc' };
-    if (sort === 'price_desc') orderBy = { priceParallel: 'desc' };
-    if (sort === 'popular') orderBy = { viewCount: 'desc' };
-
-    // Get listings
-    const [listings, total] = await Promise.all([
-      prisma.listing.findMany({
-        where: { categoryId: { in: categoryIds }, status: 'ACTIVE' },
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: { category: true }
-      }),
-      prisma.listing.count({
-        where: { categoryId: { in: categoryIds }, status: 'ACTIVE' }
-      })
-    ]);
-
-    res.json({
-      category,
-      listings: listings.map(formatListing),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Failed to fetch category:', error);
-    res.status(500).json({ error: 'Failed to fetch category' });
-  }
-});
-
-// ============================================
-// SEARCH
-// ============================================
-
-app.get('/api/v1/search', async (req, res) => {
-  try {
-    const q = (req.query.q as string) || '';
-    const category = req.query.category as string;
-    const condition = req.query.condition as string;
-    const minPrice = parseFloat(req.query.minPrice as string) || 0;
-    const maxPrice = parseFloat(req.query.maxPrice as string) || 999999;
-    const brand = req.query.brand as string;
-    const sort = (req.query.sort as string) || 'newest';
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-
-    // Build where clause
-    const where: Prisma.ListingWhereInput = {
-      status: 'ACTIVE',
-      priceParallel: { gte: minPrice, lte: maxPrice }
-    };
-
-    // Text search (simple LIKE for SQLite)
-    if (q) {
-      where.OR = [
-        { title: { contains: q } },
-        { description: { contains: q } },
-        { brand: { contains: q } }
-      ];
-    }
-
-    // Category filter
-    if (category) {
-      const cat = await prisma.category.findUnique({
-        where: { slug: category },
-        include: { children: true }
-      });
-      if (cat) {
-        const categoryIds = [cat.id, ...cat.children.map((c: { id: string }) => c.id)];
-        where.categoryId = { in: categoryIds };
-      }
-    }
-
-    // Condition filter
-    if (condition) {
-      where.condition = condition;
-    }
-
-    // Brand filter
-    if (brand) {
-      where.brand = { contains: brand };
-    }
-
-    // Build sort order
-    let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
-    if (sort === 'price_asc') orderBy = { priceParallel: 'asc' };
-    if (sort === 'price_desc') orderBy = { priceParallel: 'desc' };
-    if (sort === 'popular') orderBy = { viewCount: 'desc' };
-
-    // Execute query
-    const [listings, total] = await Promise.all([
-      prisma.listing.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: { category: true }
-      }),
-      prisma.listing.count({ where })
-    ]);
-
-    // Get aggregations for filters
-    const [brands, conditions] = await Promise.all([
-      prisma.listing.groupBy({
-        by: ['brand'],
-        where: { status: 'ACTIVE', brand: { not: null } },
-        _count: true,
-        orderBy: { _count: { brand: 'desc' } },
-        take: 20
-      }),
-      prisma.listing.groupBy({
-        by: ['condition'],
-        where: { status: 'ACTIVE', condition: { not: null } },
-        _count: true
-      })
-    ]);
-
-    res.json({
-      query: q,
-      listings: listings.map(formatListing),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      },
-      filters: {
-        brands: brands.filter((b: { brand: string | null }) => b.brand).map((b: { brand: string | null; _count: number }) => ({ name: b.brand, count: b._count })),
-        conditions: conditions.filter((c: { condition: string | null }) => c.condition).map((c: { condition: string | null; _count: number }) => ({ name: c.condition, count: c._count }))
-      }
-    });
-  } catch (error) {
-    console.error('Search failed:', error);
-    res.status(500).json({ error: 'Search failed' });
-  }
-});
 
 // ============================================
 // LISTINGS
