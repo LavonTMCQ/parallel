@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
-console.log('[DEBUG] CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME);
+// (debug log removed)
 import express from 'express';
-import cors from 'cors';
+import cors, { type CorsOptions } from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -11,23 +11,89 @@ import { getShippingRate, estimateWeight } from './services/shipping';
 import { detectCategory, mapCondition } from './data/categoryMapping';
 import { MediaService } from './services/media';
 
-// Initialize Prisma
+const NODE_ENV = process.env.NODE_ENV ?? 'development';
+const IS_PROD = NODE_ENV === 'production';
+
+function parsePort(value: string | undefined, fallback: number): number {
+  const n = value ? Number(value) : Number.NaN;
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
+}
+
+function parseCorsOrigins(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function validateEnv() {
+  const missing: string[] = [];
+
+  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
+  if (IS_PROD && !process.env.CORS_ORIGINS) missing.push('CORS_ORIGINS');
+
+  if (missing.length) {
+    const msg = `[ENV] Missing required env vars: ${missing.join(', ')}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+
+  const cloudinaryMissing = [
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
+  ].filter((k) => !process.env[k]);
+
+  if (cloudinaryMissing.length) {
+    console.warn(
+      `[ENV] Cloudinary not fully configured (optional in dev): missing ${cloudinaryMissing.join(
+        ', ',
+      )}`,
+    );
+  }
+}
+
+validateEnv();
+
+// Initialize Prisma (after env validation)
 const prisma = new PrismaClient();
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+const PORT = parsePort(process.env.PORT, 8000);
+
+const corsAllowlist = parseCorsOrigins(process.env.CORS_ORIGINS);
+const corsOrigin: CorsOptions["origin"] = (origin, callback) => {
+  // Allow non-browser clients (no Origin header)
+  if (!origin) return callback(null, true);
+
+  // Dev: allow all origins for local iteration
+  if (!IS_PROD) return callback(null, true);
+
+  // Prod: strict allowlist
+  if (corsAllowlist.includes(origin)) return callback(null, true);
+
+  return callback(null, false);
+};
 
 // Middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
-}));
-app.use(express.json());
-app.use(morgan('dev'));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
+app.use(
+  cors({
+    origin: corsOrigin,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
+  }),
+);
+app.use(express.json({ limit: '1mb' }));
+app.use(morgan(IS_PROD ? 'combined' : 'dev'));
 
 // Types
 interface PricingInputs {
