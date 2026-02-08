@@ -9,10 +9,10 @@ export async function ingestListing(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Ingest Error:", error);
     if (error.message.startsWith('QUALITY_GATE_FAILED')) {
-      return res.status(400).json({
-        error: 'QUALITY_GATE_FAILED',
-        message: 'Seller rating is below 80% threshold.'
-      });
+        return res.status(400).json({
+            error: 'QUALITY_GATE_FAILED',
+            message: error.message
+        });
     }
     return res.status(500).json({ error: 'Internal Server Error' });
   }
